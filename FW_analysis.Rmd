@@ -1,8 +1,8 @@
 ---
 title: "FW_analysis"
 Author: rose
-Details: looking at the first 786 turkers' responses on the fw turk survey
-date: CSV downloaded on 10/9/14
+Details: looking at the first 946 turkers' responses on the fw turk survey
+date: CSV downloaded on 10/14/14
 ---
 
 Some preliminaries - libraries, data, etc. 
@@ -11,11 +11,15 @@ library(ggplot2)
 library(plyr)
 library(reshape2)
 theme_set(theme_bw())
-df=read.csv("FW_918_data.csv")
+df=read.csv("FW_946.csv")
 library(stringr)
 df$age <- as.numeric(str_replace(as.character(df$word_age)," months",""))
-df$age.grp <- cut(df$age,breaks=c(6,10,14,18,22))
+df$currage <- as.numeric(str_replace(as.character(df$current_age), " year", ""))
+df$currage <- as.numeric(str_replace(as.character(df$current_age), " years", ""))
+df$age.grp <- cut(df$age,breaks=c(5,10,14,18,24))
+df$currage.grp <- cut(df$currage, breaks=c(-1,2,4,6,8,10,12,14,16,18))
 library(knitr)
+library(markdown)
 ```
 
 
@@ -27,7 +31,7 @@ Freqs of first words - count - these are the standardized words!
 freqs <- ddply(df, .(first_wd_standard), summarise, count=length(first_wd_standard))
 freqs$first_wd_standard <- factor(freqs$first_wd_standard, levels=with(freqs, first_wd_standard[order(count, first_wd_standard, decreasing = TRUE)]))
 q <- qplot(first_wd_standard, count, geom="bar", stat="identity", 
-      data=subset(freqs, count>5))
+      data=subset(freqs, count>5 & first_wd_standard != "N/A"))
 q + theme(axis.text.x = element_text(angle=90, hjust = 1, vjust=.5)) + ylab("Total words count")
 ```
 
@@ -39,7 +43,7 @@ q <- qplot(first_wd_standard, prop, geom="bar", stat="identity",
 q + theme(axis.text.x=element_text(angle=90, hjust=1, vjust=.5))+ylab("Proportion of Total Words") + xlab("Standardized first words")
 ```
 
-How many kids said something other than "Mama" or "Dada" as a first word? - by age
+How many kids said something other than "Mama" or "Dada" as a first word? - by age of first word
 ```{r}
 freqs <- ddply(df, .(word_validation, age.grp), summarise, count=length(word_validation))
 freqs <- ddply(freqs, .(word_validation), mutate, total.count=sum(count))
@@ -52,7 +56,7 @@ freqs$word_validation <- factor(freqs$word_validation,
                                   decreasing = TRUE)])))
 
 qplot(word_validation, prop, geom="bar", stat="identity", 
-           data=subset(freqs, count>1 & age.grp != "NA")) + theme(axis.text.x=element_text(angle=90, hjust=1, vjust=.5))+ylab("Proportion of Actual First Words") + xlab("Word Validation") + facet_wrap(~age.grp)
+           data=subset(freqs, count>1 & age.grp != "NA")) + theme(axis.text.x=element_text(angle=90, hjust=1, vjust=.5))+ylab("Proportion of Actual First Words") + xlab("Word Validation - Check means other first word") + facet_wrap(~age.grp)
 
 ```
 
@@ -69,7 +73,9 @@ q <- qplot(first_wd_original, prop, data=subset(freqs, count>5), geom="bar", pos
 q + theme(axis.text.x=element_text(angle=90, hjust=1, vjust=.5))+ylab("Proportion of Total Words") + xlab("Original (Non-standardized) first word")
 ```
 
- 
+---
+Looking at Age 
+---
 Age at time of first word
 
 ```{r}
@@ -77,7 +83,13 @@ qplot(age,breaks=0:25,
       data=subset(df,first_wd_standard != "N/A"))
 ```
 
-Proportion - age at time of first word
+Current age 
+```{r}
+qplot(currage,breaks=0:19, 
+      data=subset(df, first_wd_standard != "N/A"))
+```
+
+Proportion - age at time of first word by age and gender
 ```{r}
 freqs <- ddply(df, .(first_wd_standard, gender), summarise, 
                count=length(first_wd_standard))
@@ -105,6 +117,26 @@ qplot(age.grp, prop, fill=gender, geom="bar", stat="identity",
   ylab("Proportion of Children") + 
   xlab("Age at time of first word")
 ```
+
+Do people report ages differently if their kids are older? 
+```{r}
+quartz()
+mss <- aggregate(first_wd_standard ~ age.grp + currage.grp, df, length)
+ms <- ddply(mss, .(currage.grp), function(x) {
+  x$prop=x$first_wd_standard/sum(x$first_wd_standard)
+  return(x)})
+qplot(age.grp, prop, fill=currage.grp, geom="bar", stat="identity",
+      position="dodge", 
+      data=subset(ms,age.grp!="NA" & 
+                    currage.grp!="NA" & 
+                    first_wd_standard!="N/A")) + 
+  ylab("Proportion of Children") + 
+  xlab("Age at time of first word")
+```
+
+---
+Looking at Birth Order
+---
 
 Birth Order - proportion
 
@@ -172,6 +204,9 @@ qplot(first_wd_standard, prop, fill=only, position="dodge", geom="bar", stat="id
 
 ```
 
+---
+CDI Categories
+---
 CDI category proportions - excluding Mama and Dada
 
 ```{r}
@@ -191,6 +226,26 @@ qplot(word_type, prop, geom="bar", stat="identity",
 
 ```
 
+CDI categories - by age and gender 
+```{r}
+freqs <- ddply(df, .(word_type, age.grp, gender, first_wd_standard), summarise, count=length(first_wd_standard))
+freqs <- ddply(freqs, .(word_type), mutate, total.count=sum(count))
+freqs <- ddply(freqs, .(age.grp), summarise, first_wd_standard=first_wd_standard, gender=gender, word_type=word_type, prop=count/sum(count))
+freqs$prop <- freqs$count/sum(freqs$count)
+freqs$word_type <- factor(freqs$word_type, 
+                                  levels=unique(with(freqs, word_type
+                                  [order(count, word_type, 
+                                  decreasing = TRUE)])))
+qplot(word_type, prop, fill=gender, geom="bar", stat="identity",
+      position="dodge", 
+      data=subset(freqs, prop>0 & age.grp != "NA" & (first_wd_standard != "N/A" & first_wd_standard != "Mama" & first_wd_standard != "Dada"))) + ylab("Proportion of No as First Word") + 
+  theme(axis.text.x=element_text(angle=90, hjust=1, vjust=.5)) + facet_wrap(~age.grp)
+
+```
+
+---
+Looking at Individual Words by Age and Gender
+---
 "No" by age and gender
 
 ```{r}
@@ -353,4 +408,6 @@ q + theme(axis.text.x = element_text(angle=90, hjust = 1, vjust=.5)) +
 ```
 
 
-
+```{r}
+knit("FW_analysis.Rmd")
+```
