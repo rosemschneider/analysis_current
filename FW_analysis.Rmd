@@ -11,10 +11,9 @@ library(ggplot2)
 library(plyr)
 library(reshape2)
 theme_set(theme_bw())
-df=read.csv("FW_946.csv")
+df=read.csv("FW_1000.csv")
 library(stringr)
 df$age <- as.numeric(str_replace(as.character(df$word_age)," months",""))
-df$currage <- as.numeric(str_replace(as.character(df$current_age), " year", ""))
 df$currage <- as.numeric(str_replace(as.character(df$current_age), " years", ""))
 df$age.grp <- cut(df$age,breaks=c(5,10,14,18,24))
 df$currage.grp <- cut(df$currage, breaks=c(-1,2,4,6,8,10,12,14,16,18))
@@ -57,7 +56,6 @@ freqs$word_validation <- factor(freqs$word_validation,
 
 qplot(word_validation, prop, geom="bar", stat="identity", 
            data=subset(freqs, count>1 & age.grp != "NA")) + theme(axis.text.x=element_text(angle=90, hjust=1, vjust=.5))+ylab("Proportion of Actual First Words") + xlab("Word Validation - Check means other first word") + facet_wrap(~age.grp)
-
 ```
 
 For comparison, here are the original first words - proportions
@@ -85,7 +83,7 @@ qplot(age,breaks=0:25,
 
 Current age 
 ```{r}
-qplot(currage,breaks=0:19, 
+qplot(currage,breaks=0:20, 
       data=subset(df, first_wd_standard != "N/A"))
 ```
 
@@ -120,7 +118,6 @@ qplot(age.grp, prop, fill=gender, geom="bar", stat="identity",
 
 Do people report ages differently if their kids are older? 
 ```{r}
-quartz()
 mss <- aggregate(first_wd_standard ~ age.grp + currage.grp, df, length)
 ms <- ddply(mss, .(currage.grp), function(x) {
   x$prop=x$first_wd_standard/sum(x$first_wd_standard)
@@ -133,6 +130,26 @@ qplot(age.grp, prop, fill=currage.grp, geom="bar", stat="identity",
   ylab("Proportion of Children") + 
   xlab("Age at time of first word")
 ```
+
+There's a very large proportion of kids reported with a first word from 6-10mos. However, we standardized the words, relying heavily on parents' descriptions of the situation surrounding the first word event. What happens when we look within that first bin (6-10mos) for standardized first words? -- this is excluding "Mama" and "Dada"
+```{r}
+freqs <- ddply(df, .(first_wd_standard, word_age, first_wd_original), summarise, count=length(first_wd_standard))
+freqs <- ddply(freqs, .(first_wd_original), mutate, total.count=sum(count))
+freqs <- ddply(freqs, .(word_age), summarise, first_wd_standard=first_wd_standard, first_wd_original=first_wd_original, prop=count/sum(count))
+freqs$prop <- freqs$count/sum(freqs$count)
+
+freqs$first_wd_standard <- factor(freqs$first_wd_standard, 
+                                  levels=unique(with(freqs, first_wd_standard
+                                  [order(count, first_wd_standard, 
+                                  decreasing = TRUE)])))
+qplot(word_age, prop, fill=first_wd_standard, geom="bar", stat="identity",
+      position="dodge", 
+      data=subset(freqs, prop>.02 & (word_age == "6 months" | word_age == "7 months" | word_age == "8 months" | word_age == "9 months" | word_age == "10 months") & (first_wd_standard != "N/A" & first_wd_standard != "Mama" & first_wd_standard != "Dada"))) + ylab("Proportion as first word") + 
+  theme(axis.text.x=element_text(angle=90, hjust=1, vjust=.5)) + facet_wrap(~first_wd_standard)
+```
+
+Let's look at "Baba" vs. "Bottle" for this age group -- actually this is completely wrong and I need to figure out how to do it correctly
+
 
 ---
 Looking at Birth Order
@@ -236,12 +253,34 @@ freqs$word_type <- factor(freqs$word_type,
                                   levels=unique(with(freqs, word_type
                                   [order(count, word_type, 
                                   decreasing = TRUE)])))
-qplot(word_type, prop, fill=gender, geom="bar", stat="identity",
+qplot(age.grp, prop, fill=gender, geom="bar", stat="identity",
       position="dodge", 
       data=subset(freqs, prop>0 & age.grp != "NA" & (first_wd_standard != "N/A" & first_wd_standard != "Mama" & first_wd_standard != "Dada"))) + ylab("Proportion of No as First Word") + 
-  theme(axis.text.x=element_text(angle=90, hjust=1, vjust=.5)) + facet_wrap(~age.grp)
+  theme(axis.text.x=element_text(angle=90, hjust=1, vjust=.5)) + facet_wrap(~word_type)
 
 ```
+
+By age group (but this includes Mama and Dada)
+
+```{r}
+freqs <- ddply(df, .(word_type,age.grp), summarise, 
+               count=length(word_type))
+freqs$word_type <- factor(freqs$word_type, 
+                     levels=unique(with(freqs, 
+                                 word_type[order(count, 
+                                            word_type, decreasing = TRUE)])))
+freqs <- ddply(freqs, .(age.grp), summarise,
+               word_type = word_type,
+               prop=count/sum(count))
+
+qplot(word_type, prop, geom="bar", stat="identity", 
+           data=subset(freqs, prop>.01)) + 
+  theme(axis.text.x=element_text(angle=90, hjust=1, vjust=.5))+
+  ylab("Proportion of Total Words") +
+  facet_wrap(~age.grp)
+```
+
+
 
 ---
 Looking at Individual Words by Age and Gender
@@ -309,25 +348,9 @@ qplot(age.grp, prop, fill=gender, geom="bar", stat="identity",
       data=subset(freqs, prop>0 & age.grp != "NA" & first_wd_standard == "Dog" )) + ylab("Proportion of Children with Dog as First Word") + xlab("Age Group")
 ```
 
-By age group:
-
-```{r}
-freqs <- ddply(df, .(word_type,age.grp), summarise, 
-               count=length(word_type))
-freqs$word_type <- factor(freqs$word_type, 
-                     levels=unique(with(freqs, 
-                                 word_type[order(count, 
-                                            word_type, decreasing = TRUE)])))
-freqs <- ddply(freqs, .(age.grp), summarise,
-               word_type = word_type,
-               prop=count/sum(count))
-
-qplot(word_type, prop, geom="bar", stat="identity", 
-           data=subset(freqs, prop>.01)) + 
-  theme(axis.text.x=element_text(angle=90, hjust=1, vjust=.5))+
-  ylab("Proportion of Total Words") +
-  facet_wrap(~age.grp)
-```
+---
+Age Groups
+---
 
 First words by age group
 ```{r}
@@ -407,7 +430,69 @@ q + theme(axis.text.x = element_text(angle=90, hjust = 1, vjust=.5)) +
   ylab("Proportion of Total Utterances")
 ```
 
+---
+Coming back to "No" -- this had a really high proportion of utterances in this dataset, which is interesting, considering that we got almost no instances of it in the CDM data. So let's look at "No" within each of the age groups 
 
+This is 6-10 months
 ```{r}
-knit("FW_analysis.Rmd")
+freqs <- ddply(df, .(first_wd_standard, word_age, gender), summarise, count=length(first_wd_standard))
+freqs <- ddply(freqs, .(first_wd_standard), mutate, total.count=sum(count))
+freqs <- ddply(freqs, .(word_age), summarise, first_wd_standard = first_wd_standard, gender=gender,
+               prop=count/sum(count))
+freqs$prop <- freqs$count/sum(freqs$count)
+q <- qplot(word_age, prop, fill=gender, 
+           position="dodge", 
+           geom="bar",
+           stat="identity", 
+           data=subset(freqs, prop>0 & first_wd_standard == "No" & (word_age == "6 months" | word_age == "7 months" | word_age == "8 months" | word_age == "9 months" | word_age == "10 months")))
+q + theme(axis.text.x = element_text(angle=90, hjust = 1, vjust=.5)) + 
+  ylab("Proportion of kids with First Word") + facet_wrap(~first_wd_standard)
+```
+
+This is 11-14
+```{r}
+freqs <- ddply(df, .(first_wd_standard, word_age, gender), summarise, count=length(first_wd_standard))
+freqs <- ddply(freqs, .(first_wd_standard), mutate, total.count=sum(count))
+freqs <- ddply(freqs, .(word_age), summarise, first_wd_standard = first_wd_standard, gender=gender,
+               prop=count/sum(count))
+freqs$prop <- freqs$count/sum(freqs$count)
+q <- qplot(word_age, prop, fill=gender, 
+           position="dodge", 
+           geom="bar",
+           stat="identity", 
+           data=subset(freqs, prop>0 & first_wd_standard == "No" & (word_age == "11 months" | word_age == "12 months" | word_age == "13 months" | word_age == "14 months")))
+q + theme(axis.text.x = element_text(angle=90, hjust = 1, vjust=.5)) + 
+  ylab("Proportion of kids with First Word") + facet_wrap(~first_wd_standard)
+```
+
+This is 15-18 
+```{r}
+freqs <- ddply(df, .(first_wd_standard, word_age, gender), summarise, count=length(first_wd_standard))
+freqs <- ddply(freqs, .(first_wd_standard), mutate, total.count=sum(count))
+freqs <- ddply(freqs, .(word_age), summarise, first_wd_standard = first_wd_standard, gender=gender,
+               prop=count/sum(count))
+freqs$prop <- freqs$count/sum(freqs$count)
+q <- qplot(word_age, prop, fill=gender, 
+           position="dodge", 
+           geom="bar",
+           stat="identity", 
+           data=subset(freqs, prop>0 & first_wd_standard == "No" & (word_age == "15 months" | word_age == "16 months" | word_age == "17 months" | word_age == "18 months")))
+q + theme(axis.text.x = element_text(angle=90, hjust = 1, vjust=.5)) + 
+  ylab("Proportion of kids with First Word") + facet_wrap(~first_wd_standard)
+```
+
+This is 19-24
+```{r}
+freqs <- ddply(df, .(first_wd_standard, word_age, gender), summarise, count=length(first_wd_standard))
+freqs <- ddply(freqs, .(first_wd_standard), mutate, total.count=sum(count))
+freqs <- ddply(freqs, .(word_age), summarise, first_wd_standard = first_wd_standard, gender=gender,
+               prop=count/sum(count))
+freqs$prop <- freqs$count/sum(freqs$count)
+q <- qplot(word_age, prop, fill=gender, 
+           position="dodge", 
+           geom="bar",
+           stat="identity", 
+           data=subset(freqs, prop>0 & first_wd_standard == "No" & (word_age == "19 months" | word_age == "20 months" | word_age == "21 months" | word_age == "22 months" | word_age == "23 months" | word_age == "24 months")))
+q + theme(axis.text.x = element_text(angle=90, hjust = 1, vjust=.5)) + 
+  ylab("Proportion of kids with First Word") + facet_wrap(~first_wd_standard)
 ```
